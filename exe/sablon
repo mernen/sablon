@@ -1,0 +1,26 @@
+#!/usr/bin/env ruby
+
+require 'sablon'
+require 'json'
+
+if ARGV.size < 1
+  puts <<-HELP
+cat <context path> | sablon <template path> [<output path>]
+  HELP
+  exit
+end
+
+template_path = File.expand_path(ARGV[0])
+context_json = STDIN.readlines.join
+context = JSON.parse(context_json)
+config = context.delete("_sablon") || {}
+section_properties = config.fetch("properties", {})
+
+template = Sablon.template(template_path)
+
+if !ARGV[1].nil? && !ARGV[1].empty?
+  output_path = File.expand_path(ARGV[1])
+  template.render_to_file(output_path, context, [], section_properties)
+else
+  $stdout.print template.render_to_string(context, [], section_properties)
+end

@@ -2,24 +2,26 @@ module Sablon
   module Parser
     class MailMerge
       class MergeField
-        KEY_PATTERN = /^\s*MERGEFIELD ([^ ]+)\s+\\\* MERGEFORMAT\s*$/
+        KEY_PATTERN = /^\s*MERGEFIELD\s+([^ ]+)\s+\\\*\s+MERGEFORMAT\s*$/
+
+        def valid?
+          expression
+        end
+
         def expression
           $1 if @raw_expression =~ KEY_PATTERN
         end
 
         private
-        def replace_field_display(node, text)
-          display_node = node.search(".//w:t").first
-          text.to_s.scan(/[^\n]+|\n/).reverse.each do |part|
-            if part == "\n"
-              display_node.add_next_sibling Nokogiri::XML::Node.new "w:br", display_node.document
-            else
-              text_part = display_node.dup
-              text_part.content = part
-              display_node.add_next_sibling text_part
-            end
-          end
+        def replace_field_display(node, content)
+          paragraph = node.ancestors(".//w:p").first
+          display_node = get_display_node(node)
+          content.append_to(paragraph, display_node)
           display_node.remove
+        end
+
+        def get_display_node(node)
+          node.search(".//w:t").first
         end
       end
 
@@ -29,13 +31,29 @@ module Sablon
           @raw_expression = @nodes.flat_map {|n| n.search(".//w:instrText").map(&:content) }.join
         end
 
-        def replace(value)
-          replace_field_display(pattern_node, value)
+        def valid?
+          separate_node && get_display_node(pattern_node) && expression
+        end
+
+        def replace(content)
+          replace_field_display(pattern_node, content)
           (@nodes - [pattern_node]).each(&:remove)
+        end
+
+        def remove
+          @nodes.each(&:remove)
         end
 
         def ancestors(*args)
           @nodes.first.ancestors(*args)
+        end
+
+        def start_node
+          @nodes.first
+        end
+
+        def end_node
+          @nodes.last
         end
 
         private
@@ -54,14 +72,23 @@ module Sablon
           @raw_expression = @node["w:instr"]
         end
 
-        def replace(value)
-          replace_field_display(@node, value)
+        def replace(content)
+          replace_field_display(@node, content)
           @node.replace(@node.children)
+        end
+
+        def remove
+          @node.remove
         end
 
         def ancestors(*args)
           @node.ancestors(*args)
         end
+
+        def start_node
+          @node
+        end
+        alias_method :end_node, :start_node
       end
 
       def parse_fields(xml)
@@ -72,7 +99,7 @@ module Sablon
           elsif node.name == "fldChar" && node["w:fldCharType"] == "begin"
             field = build_complex_field(node)
           end
-          fields << field if field && field.expression
+          fields << field if field && field.valid?
         end
         fields
       end

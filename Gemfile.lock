@@ -1,0 +1,32 @@
+PATH
+  remote: .
+  specs:
+    sablon (0.0.19)
+      nokogiri (>= 1.6.0)
+      redcarpet (>= 3.2)
+      rubyzip (>= 1.1)
+
+GEM
+  remote: https://rubygems.org/
+  specs:
+    mini_portile2 (2.0.0)
+    minitest (5.8.0)
+    nokogiri (1.6.7.1)
+      mini_portile2 (~> 2.0.0.rc2)
+    rake (10.4.2)
+    redcarpet (3.3.3)
+    rubyzip (1.1.7)
+    xml-simple (1.1.5)
+
+PLATFORMS
+  ruby
+
+DEPENDENCIES
+  bundler (>= 1.6)
+  minitest (~> 5.4)
+  rake (~> 10.0)
+  sablon!
+  xml-simple
+
+BUNDLED WITH
+   1.10.6

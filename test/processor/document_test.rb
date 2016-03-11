@@ -3,13 +3,13 @@ require "test_helper"
 require "support/document_xml_helper"
 require "support/xml_snippets"
 
-class ProcessorTest < Sablon::TestCase
+class ProcessorDocumentTest < Sablon::TestCase
   include DocumentXMLHelper
   include XMLSnippets
 
   def setup
     super
-    @processor = Sablon::Processor
+    @processor = Sablon::Processor::Document
   end
 
   def test_simple_field_replacement
@@ -17,12 +17,26 @@ class ProcessorTest < Sablon::TestCase
 
     assert_equal "Hello! My Name is Jack , nice to meet you.", text(result)
     assert_xml_equal <<-document, result
+    <w:p>
       <w:r><w:t xml:space="preserve">Hello! My Name is </w:t></w:r>
         <w:r w:rsidR="004B49F0">
           <w:rPr><w:noProof/></w:rPr>
           <w:t>Jack</w:t>
         </w:r>
       <w:r w:rsidR="00BE47B1"><w:t xml:space="preserve">, nice to meet you.</w:t></w:r>
+    </w:p>
+    document
+  end
+
+  def test_simple_field_replacement_with_nil
+    result = process(snippet("simple_field"), {"first_name" => nil})
+
+    assert_equal "Hello! My Name is , nice to meet you.", text(result)
+    assert_xml_equal <<-document, result
+    <w:p>
+      <w:r><w:t xml:space="preserve">Hello! My Name is </w:t></w:r>
+      <w:r w:rsidR="00BE47B1"><w:t xml:space="preserve">, nice to meet you.</w:t></w:r>
+    </w:p>
     document
   end
 
@@ -36,12 +50,14 @@ class ProcessorTest < Sablon::TestCase
 
     assert_equal "Hello! My Name is Zane , nice to meet you.", text(result)
     assert_xml_equal <<-document, result
+    <w:p>
       <w:r><w:t xml:space="preserve">Hello! My Name is </w:t></w:r>
       <w:r w:rsidR="004B49F0">
         <w:rPr><w:b/><w:noProof/></w:rPr>
         <w:t>Zane</w:t>
       </w:r>
       <w:r w:rsidR="00BE47B1"><w:t xml:space="preserve">, nice to meet you.</w:t></w:r>
+    </w:p>
     document
   end
 
@@ -50,12 +66,14 @@ class ProcessorTest < Sablon::TestCase
 
     assert_equal "Hello! My Name is Daniel , nice to meet you.", text(result)
     assert_xml_equal <<-document, result
+    <w:p>
       <w:r><w:t xml:space="preserve">Hello! My Name is </w:t></w:r>
       <w:r w:rsidR="00441382">
         <w:rPr><w:noProof/></w:rPr>
         <w:t>Daniel</w:t>
       </w:r>
       <w:r w:rsidR="00BE47B1"><w:t xml:space="preserve">, nice to meet you.</w:t></w:r>
+    </w:p>
     document
   end
 
@@ -118,6 +136,73 @@ class ProcessorTest < Sablon::TestCase
         </w:tc>
       </w:tr>
     </w:tbl>
+    document
+  end
+
+  def test_paragraph_block_within_empty_table_cell_and_blank_replacement
+    result = process(snippet("paragraph_loop_within_table_cell"), {"technologies" => []})
+
+    assert_equal "", text(result)
+    assert_xml_equal <<-document, result
+    <w:tbl>
+      <w:tblGrid>
+        <w:gridCol w:w="2202"/>
+      </w:tblGrid>
+      <w:tr w:rsidR="00757DAD">
+        <w:tc>
+          <w:p></w:p>
+        </w:tc>
+      </w:tr>
+    </w:tbl>
+    document
+  end
+
+  def test_adds_blank_paragraph_to_empty_table_cells
+    result = process(snippet("corrupt_table"), {})
+    assert_xml_equal <<-document, result
+<w:tbl>
+  <w:tblGrid>
+    <w:gridCol w:w="2202"/>
+  </w:tblGrid>
+  <w:tr w:rsidR="00757DAD">
+    <w:tc>
+      <w:p>
+        Hans
+      </w:p>
+    </w:tc>
+
+    <w:tc>
+      <w:tcPr>
+        <w:tcW w:w="5635" w:type="dxa"/>
+      </w:tcPr>
+      <w:p></w:p>
+    </w:tc>
+  </w:tr>
+
+  <w:tr w:rsidR="00757DAD">
+    <w:tc>
+      <w:tcPr>
+        <w:tcW w:w="2202" w:type="dxa"/>
+      </w:tcPr>
+      <w:p>
+        <w:r>
+          <w:rPr><w:noProof/></w:rPr>
+          <w:t>1.</w:t>
+        </w:r>
+      </w:p>
+    </w:tc>
+
+    <w:tc>
+      <w:p>
+        </w:p><w:p>
+        <w:r w:rsidR="004B49F0">
+          <w:rPr><w:noProof/></w:rPr>
+          <w:t>Chef</w:t>
+        </w:r>
+      </w:p>
+    </w:tc>
+  </w:tr>
+</w:tbl>
     document
   end
 
@@ -211,6 +296,25 @@ class ProcessorTest < Sablon::TestCase
     document
   end
 
+  def test_loop_over_collection_convertable_to_an_enumerable
+    style_collection = Class.new do
+      def to_ary
+        ["CSS", "SCSS", "LESS"]
+      end
+    end
+
+    result = process(snippet("paragraph_loop"), {"technologies" => style_collection.new})
+    assert_equal "CSS SCSS LESS", text(result)
+  end
+
+  def test_loop_over_collection_not_convertable_to_an_enumerable_raises_error
+    not_a_collection = Class.new {}
+
+    assert_raises Sablon::ContextError do
+      process(snippet("paragraph_loop"), {"technologies" => not_a_collection.new})
+    end
+  end
+
   def test_loop_with_missing_variable_raises_error
     e = assert_raises Sablon::ContextError do
       process(snippet("paragraph_loop"), {})
@@ -249,12 +353,30 @@ class ProcessorTest < Sablon::TestCase
     assert_equal "Anthony Hall", text(result)
   end
 
+  def test_simple_field_conditional_inline
+    result = process(snippet("conditional_inline"), {"middle_name" => true})
+    assert_equal "Anthony Michael Hall", text(result)
+  end
+
+  def test_complex_field_conditional_inline
+    with_false = process(snippet("complex_field_inline_conditional"), {"boolean" => false})
+    assert_equal "ParagraphBefore Before After ParagraphAfter", text(with_false)
+
+    with_true = process(snippet("complex_field_inline_conditional"), {"boolean" => true})
+    assert_equal "ParagraphBefore Before Content After ParagraphAfter", text(with_true)
+  end
+
   def test_conditional_with_predicate
     result = process(snippet("conditional_with_predicate"), {"body" => ""})
     assert_equal "some content", text(result)
 
     result = process(snippet("conditional_with_predicate"), {"body" => "not empty"})
     assert_equal "", text(result)
+  end
+
+  def test_comment
+    result = process(snippet("comment"), {})
+    assert_equal "Before After", text(result)
   end
 
   private

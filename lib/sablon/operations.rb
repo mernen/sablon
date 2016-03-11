@@ -3,14 +3,19 @@ module Sablon
   module Statement
     class Insertion < Struct.new(:expr, :field)
       def evaluate(context)
-        field.replace(expr.evaluate(context))
+        if content = expr.evaluate(context)
+          field.replace(Sablon::Content.wrap(expr.evaluate(context)))
+        else
+          field.remove
+        end
       end
     end
 
     class Loop < Struct.new(:list_expr, :iterator_name, :block)
       def evaluate(context)
         value = list_expr.evaluate(context)
-        raise ContextError, "The expression #{list_expr.inspect} should evaluate to an enumerable but was: #{value.inspect}" unless value.is_a? Enumerable
+        value = value.to_ary if value.respond_to?(:to_ary)
+        raise ContextError, "The expression #{list_expr.inspect} should evaluate to an enumerable but was: #{value.inspect}" unless value.is_a?(Enumerable)
 
         content = value.flat_map do |item|
           iteration_context = context.merge(iterator_name => item)
@@ -40,6 +45,12 @@ module Sablon
       end
     end
 
+    class Comment < Struct.new(:block)
+      def evaluate(context)
+        block.replace []
+      end
+    end
+
     class Image < Struct.new(:image_reference, :block)
       def evaluate(context)
         image = image_reference.evaluate(context)
@@ -59,29 +70,25 @@ module Sablon
       end
     end
 
-    class LookupOrMethodCall < Struct.new(:receiver_expr, :method_chain)
+    class LookupOrMethodCall < Struct.new(:receiver_expr, :expression)
       def evaluate(context)
-        receiver = receiver_expr.evaluate(context)
-        method_chain.each do |method|
-          receiver = case receiver
-                       when Hash
-                         receiver[method]
-                       else
-                         receiver.public_send method
-                     end
+        if receiver = receiver_expr.evaluate(context)
+          expression.split(".").inject(receiver) do |local, m|
+            ( local[m.to_sym] || local[m.to_s] if local.respond_to?( :[] )    ) ||
+            ( local.public_send(m.to_sym)      if local.respond_to?(m.to_sym) )
+          end
         end
-        receiver
       end
 
       def inspect
-        "«#{receiver_expr.name}.#{method_chain.join('.')}»"
+        "«#{receiver_expr.name}.#{expression}»"
       end
     end
 
     def self.parse(expression)
       if expression.include?(".")
         parts = expression.split(".")
-        LookupOrMethodCall.new(Variable.new(parts.first), parts[1..-1])
+        LookupOrMethodCall.new(Variable.new(parts.shift), parts.join("."))
       else
         Variable.new(expression)
       end
