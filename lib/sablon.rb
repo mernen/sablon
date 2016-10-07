@@ -15,8 +15,6 @@ require "sablon/html/converter"
 require "sablon/content"
 require "sablon/image"
 
-require 'redcarpet'
-
 module Sablon
   class TemplateError < ArgumentError; end
   class ContextError < ArgumentError; end
