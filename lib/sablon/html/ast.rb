@@ -159,7 +159,7 @@ XML
 
       private
       def normalized_string
-        string.tr("\u00A0", ' ')
+        string.tr("\u00A0", ' ').gsub('&', '&#38;').gsub('<', '&#60;').gsub('>', '&#62;')
       end
     end
 
