@@ -36,6 +36,8 @@ Sablon templates are normal Word documents (`.docx`) sprinkled with MailMerge fi
 to perform operations. The following section uses the notation `«=title»` to
 refer to [Word MailMerge](http://en.wikipedia.org/wiki/Mail_merge) fields.
 
+A detailed description about how to create a template can be found [here](misc/TEMPLATE.md)
+
 #### Content Insertion
 
 The most basic operation is to insert content. The contents of a context
